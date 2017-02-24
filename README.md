@@ -1,5 +1,5 @@
 # infiniband-tests
-This is identical to cray-tests project but for infiniband
+This is identical to cray-tests (https://github.com/fsalem/cray-tests) project but for infiniband
 
 Libfabric test suite targeted primarily at the Infiniband Verbs provider. The original cray-tests project allows only two processes to be running. This project support various test scenarios with multiple nodes:
 
