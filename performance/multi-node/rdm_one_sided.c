@@ -83,7 +83,6 @@ typedef struct buf_desc {
 	uint64_t key;
 } buf_desc_t;
 
-
 struct per_thread_data {
 	pthread_t thread;
 	int tid; /* thread id */
@@ -118,6 +117,10 @@ struct per_iteration_data {
 	};
 };
 
+struct address_tuple {
+	char* address;
+	char* port;
+};
 
 static pthread_barrier_t thread_barrier;
 struct per_thread_data *thread_data;
@@ -126,7 +129,7 @@ struct fid_fabric *fab;
 struct fid_domain *dom;
 static int thread_safe = 1;
 
-int myid, numprocs;
+int myid, numprocs, process_type; // process_type = 0 ==> sender, process_type = 1 ==> receiver
 
 struct test_tunables {
 	int threads;
@@ -135,8 +138,7 @@ struct test_tunables {
 static struct test_tunables tunables;
 static pthread_mutex_t mutex;
 
-void print_usage(void)
-{
+void print_usage(void) {
 	if (!myid) {
 		fprintf(stderr, "\n%s\n", TEST_DESC);
 		fprintf(stderr, "\nOptions:\n");
@@ -147,8 +149,7 @@ void print_usage(void)
 	}
 }
 
-static void cq_readerr(struct fid_cq *cq, const char *cq_str)
-{
+static void cq_readerr(struct fid_cq *cq, const char *cq_str) {
 	struct fi_cq_err_entry cq_err;
 	const char *err_str;
 	int ret;
@@ -158,19 +159,18 @@ static void cq_readerr(struct fid_cq *cq, const char *cq_str)
 		ct_print_fi_error("fi_cq_readerr", ret);
 	} else {
 		err_str = fi_cq_strerror(cq, cq_err.prov_errno, cq_err.err_data,
-					NULL, 0);
+		NULL, 0);
 		fprintf(stderr, "%s: %d %s\n", cq_str, cq_err.err,
-			fi_strerror(cq_err.err));
+				fi_strerror(cq_err.err));
 		fprintf(stderr, "%s: prov_err: %s (%d)\n", cq_str, err_str,
-			cq_err.prov_errno);
+				cq_err.prov_errno);
 	}
 }
 
 /*
  * fi_cq_err_entry can be cast to any CQ entry format.
  */
-static int wait_for_comp(struct fid_cq *cq, int num_completions)
-{
+static int wait_for_comp(struct fid_cq *cq, int num_completions) {
 	struct fi_cq_err_entry comp;
 	int ret;
 
@@ -190,15 +190,13 @@ static int wait_for_comp(struct fid_cq *cq, int num_completions)
 	return 0;
 }
 
-static void free_ep_res(struct per_thread_data *ptd)
-{
+static void free_ep_res(struct per_thread_data *ptd) {
 	fi_close(&ptd->av->fid);
 	fi_close(&ptd->rcq->fid);
 	fi_close(&ptd->scq->fid);
 }
 
-static int alloc_ep_res(struct per_thread_data *ptd)
-{
+static int alloc_ep_res(struct per_thread_data *ptd) {
 	struct fi_cq_attr cq_attr;
 	struct fi_av_attr av_attr;
 	int ret;
@@ -223,8 +221,8 @@ static int alloc_ep_res(struct per_thread_data *ptd)
 	}
 
 	memset(&av_attr, 0, sizeof(av_attr));
-	av_attr.type = fi->domain_attr->av_type ?
-			fi->domain_attr->av_type : FI_AV_MAP;
+	av_attr.type =
+			fi->domain_attr->av_type ? fi->domain_attr->av_type : FI_AV_MAP;
 	av_attr.count = 2;
 	av_attr.name = NULL;
 
@@ -232,21 +230,17 @@ static int alloc_ep_res(struct per_thread_data *ptd)
 	ret = fi_av_open(dom, &av_attr, &ptd->av, NULL);
 	if (ret) {
 		ct_print_fi_error("fi_av_open", ret);
-		 goto err3;
-	 }
+		goto err3;
+	}
 
 	return 0;
 
-err3:
-	fi_close(&ptd->rcq->fid);
-err2:
-	fi_close(&ptd->scq->fid);
-err1:
-	return ret;
+	err3: fi_close(&ptd->rcq->fid);
+	err2: fi_close(&ptd->scq->fid);
+	err1: return ret;
 }
 
-static int bind_ep_res(struct per_thread_data *ptd)
-{
+static int bind_ep_res(struct per_thread_data *ptd) {
 	int ret;
 
 	/* Bind Send CQ with endpoint to collect send completions */
@@ -274,18 +268,15 @@ static int bind_ep_res(struct per_thread_data *ptd)
 	if (ret) {
 		ct_print_fi_error("fi_enable", ret);
 		return ret;
-	 }
+	}
 
 	return ret;
 }
 
-static int init_fabric(void)
-{
+static int init_fabric(const char* addr, const char* port, const uint64_t flags) {
 	int ret;
-	uint64_t flags = 0;
-
 	/* Get fabric info */
-	ret = fi_getinfo(CT_FIVERSION, NULL, NULL, flags, hints, &fi);
+	ret = fi_getinfo(CT_FIVERSION, addr, port, flags, hints, &fi);
 	if (ret) {
 		ct_print_fi_error("fi_getinfo", ret);
 		return ret;
@@ -297,7 +288,6 @@ static int init_fabric(void)
 		ct_print_fi_error("fi_fabric", ret);
 		goto err1;
 	}
-
 
 	if (!thread_safe) {
 		fi->domain_attr->threading = FI_THREAD_COMPLETION;
@@ -314,14 +304,11 @@ static int init_fabric(void)
 
 	return 0;
 
-err2:
-	fi_close(&fab->fid);
-err1:
-	return ret;
+	err2: fi_close(&fab->fid);
+	err1: return ret;
 }
 
-static int init_endpoint(struct per_thread_data *ptd)
-{
+static int init_endpoint(struct per_thread_data *ptd) {
 	int ret;
 
 	/* Open endpoint */
@@ -343,17 +330,13 @@ static int init_endpoint(struct per_thread_data *ptd)
 
 	return 0;
 
-err5:
-	free_ep_res(ptd);
-err4:
-	fi_close(&ptd->ep->fid);
-err3:
-	fi_close(&dom->fid);
+	err5: free_ep_res(ptd);
+	err4: fi_close(&ptd->ep->fid);
+	err3: fi_close(&dom->fid);
 	return ret;
 }
 
-static int init_av(struct per_thread_data *ptd)
-{
+static int init_av(struct per_thread_data *ptd) {
 	void *addr;
 	size_t addrlen = 0;
 	int ret;
@@ -370,13 +353,14 @@ static int init_av(struct per_thread_data *ptd)
 	ptd->addrs = malloc(numprocs * addrlen);
 	assert(ptd->addrs);
 
-	ctpm_Allgather(addr, addrlen, ptd->addrs);
+	// TODO ctpm_Allgather(addr, addrlen, ptd->addrs);
 
 	ptd->fi_addrs = malloc(numprocs * sizeof(fi_addr_t));
 	assert(ptd->fi_addrs);
 
 	/* Insert address to the AV and get the fabric address back */
-	ret = fi_av_insert(ptd->av, ptd->addrs, numprocs, ptd->fi_addrs, 0, &ptd->fi_ctx_av);
+	ret = fi_av_insert(ptd->av, ptd->addrs, numprocs, ptd->fi_addrs, 0,
+			&ptd->fi_ctx_av);
 	if (ret != numprocs) {
 		ct_print_fi_error("fi_av_insert", ret);
 		return ret;
@@ -387,8 +371,7 @@ static int init_av(struct per_thread_data *ptd)
 	return 0;
 }
 
-int init_per_thread_data(struct per_thread_data *ptd)
-{
+int init_per_thread_data(struct per_thread_data *ptd) {
 	int align_size;
 	int ret;
 	buf_desc_t lbuf_desc;
@@ -409,12 +392,13 @@ int init_per_thread_data(struct per_thread_data *ptd)
 	align_size = getpagesize();
 	assert(align_size <= MAX_ALIGNMENT);
 
-	ptd->s_buf = (char *) (((unsigned long) ptd->s_buf_original + (align_size - 1)) /
-				align_size * align_size);
-	ptd->r_buf = (char *) (((unsigned long) ptd->r_buf_original + (align_size - 1)) /
-				align_size * align_size);
+	ptd->s_buf = (char *) (((unsigned long) ptd->s_buf_original
+			+ (align_size - 1)) / align_size * align_size);
+	ptd->r_buf = (char *) (((unsigned long) ptd->r_buf_original
+			+ (align_size - 1)) / align_size * align_size);
 
-	ret = fi_mr_reg(dom, ptd->r_buf, MYBUFSIZE, FI_REMOTE_WRITE, 0, 0, 0, &ptd->r_mr, NULL);
+	ret = fi_mr_reg(dom, ptd->r_buf, MYBUFSIZE, FI_REMOTE_WRITE, 0, 0, 0,
+			&ptd->r_mr, NULL);
 	if (ret) {
 		ct_print_fi_error("fi_mr_reg", ret);
 		return -1;
@@ -426,9 +410,9 @@ int init_per_thread_data(struct per_thread_data *ptd)
 	ptd->rbuf_descs = (buf_desc_t *) malloc(numprocs * sizeof(buf_desc_t));
 
 	/* Distribute memory keys */
-	ctpm_Allgather(&lbuf_desc, sizeof(lbuf_desc), ptd->rbuf_descs);
-
-	ret = fi_mr_reg(dom, ptd->s_buf, MYBUFSIZE, FI_WRITE, 0, 0, 0, &ptd->l_mr, NULL);
+	// TODO ctpm_Allgather(&lbuf_desc, sizeof(lbuf_desc), ptd->rbuf_descs);
+	ret = fi_mr_reg(dom, ptd->s_buf, MYBUFSIZE, FI_WRITE, 0, 0, 0, &ptd->l_mr,
+	NULL);
 	if (ret) {
 		ct_print_fi_error("fi_mr_reg", ret);
 		return -1;
@@ -437,8 +421,7 @@ int init_per_thread_data(struct per_thread_data *ptd)
 	return 0;
 }
 
-int fini_per_thread_data(struct per_thread_data * ptd)
-{
+int fini_per_thread_data(struct per_thread_data * ptd) {
 	assert(ptd != NULL);
 
 	if (&ptd->l_mr->fid != NULL)
@@ -454,8 +437,7 @@ int fini_per_thread_data(struct per_thread_data * ptd)
 	return 0;
 }
 
-void *thread_fn(void *data)
-{
+void *thread_fn(void *data) {
 	int i, j, peer;
 	int size;
 	ssize_t __attribute__((unused)) fi_rc;
@@ -467,28 +449,26 @@ void *thread_fn(void *data)
 	size = it.message_size;
 
 	if (it.thread_id >= tunables.threads)
-		return (void *)-EINVAL;
+		return (void *) -EINVAL;
 
 	ptd = &thread_data[it.thread_id];
 	ptd->bytes_sent = 0;
 
-        ct_tbarrier(&ptd->tbar);
+	ct_tbarrier(&ptd->tbar);
 
 	if (myid == 0) {
 		peer = 1;
 
 		for (i = 0; i < loop + skip; i++) {
-			if (i == skip) {  /* warm up loop */
+			if (i == skip) { /* warm up loop */
 				t_start = get_time_usec();
 				ptd->bytes_sent = 0;
 			}
 
 			for (j = 0; j < window_size; j++) {
 				fi_rc = fi_write(ptd->ep, ptd->s_buf, size, ptd->l_mr,
-						ptd->fi_addrs[peer],
-						ptd->rbuf_descs[peer].addr,
-						ptd->rbuf_descs[peer].key,
-						(void *)(intptr_t)j);
+						ptd->fi_addrs[peer], ptd->rbuf_descs[peer].addr,
+						ptd->rbuf_descs[peer].key, (void *) (intptr_t) j);
 				assert(fi_rc==FI_SUCCESS);
 				ptd->bytes_sent += size;
 			}
@@ -496,15 +476,13 @@ void *thread_fn(void *data)
 			wait_for_comp(ptd->scq, window_size);
 		}
 
-		fi_rc = fi_send(ptd->ep, ptd->s_buf, 4, NULL,
-				ptd->fi_addrs[peer],
-				NULL);
+		fi_rc = fi_send(ptd->ep, ptd->s_buf, 4, NULL, ptd->fi_addrs[peer],
+		NULL);
 		assert(!fi_rc);
 		wait_for_comp(ptd->scq, 1);
 
-		fi_rc = fi_recv(ptd->ep, ptd->s_buf, 4, NULL,
-				ptd->fi_addrs[peer],
-				NULL);
+		fi_rc = fi_recv(ptd->ep, ptd->s_buf, 4, NULL, ptd->fi_addrs[peer],
+		NULL);
 		assert(!fi_rc);
 		wait_for_comp(ptd->rcq, 1);
 
@@ -512,30 +490,47 @@ void *thread_fn(void *data)
 	} else if (myid == 1) {
 		peer = 0;
 
-		fi_rc = fi_recv(ptd->ep, ptd->s_buf, 4, NULL,
-				ptd->fi_addrs[peer],
-				NULL);
+		fi_rc = fi_recv(ptd->ep, ptd->s_buf, 4, NULL, ptd->fi_addrs[peer],
+		NULL);
 		assert(!fi_rc);
 		wait_for_comp(ptd->rcq, 1);
 
-		fi_rc = fi_send(ptd->ep, ptd->s_buf, 4, NULL,
-				ptd->fi_addrs[peer],
-				NULL);
+		fi_rc = fi_send(ptd->ep, ptd->s_buf, 4, NULL, ptd->fi_addrs[peer],
+		NULL);
 		assert(!fi_rc);
 		wait_for_comp(ptd->scq, 1);
 	}
 
-        ct_tbarrier(&ptd->tbar);
+	ct_tbarrier(&ptd->tbar);
 
-	ptd->latency = (t_end - t_start) / (double)(loop * window_size);
+	ptd->latency = (t_end - t_start) / (double) (loop * window_size);
 	ptd->time_start = t_start;
 	ptd->time_end = t_end;
 
 	return NULL;
 }
 
-int main(int argc, char *argv[])
-{
+struct address_tuple* get_input_addresses(char* file_name, int num_addrs) {
+	int i = 0;
+	struct address_tuple* addresses = malloc(
+			num_addrs * sizeof(struct address_tuple));
+
+	char address[15] = { '\0' };
+	char port[6];
+
+	FILE *file = fopen(file_name, "r+");
+	if (file == NULL)
+		exit(1);
+
+	while (fscanf(file, "%s", address) == 1 && fscanf(file, "%s", port) == 1) {
+		addresses[i].address = address;
+		addresses[i].port = port;
+		printf("\n%s \t %s\n", address, port);
+	}
+	fclose(file);
+	return addresses;
+}
+int main(int argc, char *argv[]) {
 	int op, ret;
 	int i, j, size;
 	struct per_iteration_data iter_key;
@@ -545,12 +540,12 @@ int main(int argc, char *argv[])
 	uint64_t bytes_sent;
 	double mbps;
 
-	pthread_mutex_init(&mutex, NULL);
-	tunables.threads = 1;
+	// TODO pthread_mutex_init(&mutex, NULL);
+	// TODO tunables.threads = 1;
 
-	ctpm_Init(&argc, &argv);
-	ctpm_Rank(&myid);
-	ctpm_Job_size(&numprocs);
+	//ctpm_Init(&argc, &argv);
+	//ctpm_Rank(&myid);
+	//ctpm_Job_size(&numprocs);
 
 	hints = fi_allocinfo();
 	if (!hints) {
@@ -558,10 +553,31 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	while ((op = getopt(argc, argv, "hmt:i:l:s:" CT_STD_OPTS)) != -1) {
+	while ((op = getopt(argc, argv, "hmt:i:l:s:r:n:p:" CT_STD_OPTS)) != -1) {
 		switch (op) {
 		default:
 			ct_parse_std_opts(op, optarg, hints);
+			break;
+		case 'r': // process rank
+			myid = atoi(optarg);
+			if (myid < 0) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+			break;
+		case 'n': // num of processes
+			numprocs = atoi(optarg);
+			if (numprocs < 2) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
+			break;
+		case 'p': // sender OR receiver
+			process_type = atoi(optarg);
+			if (process_type != 0 && process_type != 1) {
+				print_usage();
+				return EXIT_FAILURE;
+			}
 			break;
 		case 'l':  // loops
 			loop = atoi(optarg);
@@ -610,23 +626,34 @@ int main(int argc, char *argv[])
 		}
 	}
 
-	pthread_barrier_init(&thread_barrier, NULL, tunables.threads);
-
-	hints->ep_attr->type	= FI_EP_RDM;
-	hints->caps		= FI_MSG | FI_DIRECTED_RECV | FI_RMA;
-	hints->mode		= FI_CONTEXT | FI_LOCAL_MR;
-	hints->domain_attr->mr_mode = FI_MR_BASIC;
-
 	if (numprocs != 2) {
 		if (myid == 0) {
 			fprintf(stderr, "This test requires exactly two processes\n");
 		}
-		ctpm_Finalize();
+		// TODO ctpm_Finalize();
 		return -1;
 	}
 
+	struct address_tuple* addresses = get_input_addresses("addresses.in",
+			numprocs / 2);
+	printf("size if addresses = |%s|, |%s|\n", addresses[0].address,
+			addresses[0].port);
+	// TODO pthread_barrier_init(&thread_barrier, NULL, tunables.threads);
+	/*
+	hints->caps =
+	FI_MSG | FI_RMA | FI_WRITE | FI_SEND | FI_RECV | FI_REMOTE_WRITE;
+	hints->mode = FI_LOCAL_MR;
+	*/hints->ep_attr->type = FI_EP_RDM;
+	/*// TODO hints->rx_attr->mode = FI_LOCAL_MR | FI_RX_CQ_DATA;
+	hints->domain_attr->threading = FI_THREAD_SAFE;
+	hints->addr_format = FI_SOCKADDR_IN;
+	hints->fabric_attr->prov_name = strdup("sockets");//strdup("verbs");
+*/
+	//int res = fi_getinfo(FI_VERSION(1, 1), local_host_name.c_str(), nullptr,
+	//FI_SOURCE, hints, &info);
+
 	/* Fabric initialization */
-	ret = init_fabric();
+	ret = init_fabric(addresses[0].address, addresses[0].port, 0);
 	if (ret) {
 		fprintf(stderr, "Problem in fabric initialization\n");
 		return ret;
@@ -642,17 +669,17 @@ int main(int argc, char *argv[])
 
 	for (i = 0; i < tunables.threads; i++) {
 		init_per_thread_data(&thread_data[i]);
-		ct_tbarrier_init(&thread_data[i].tbar, tunables.threads,
-				 tbar_counter, tbar_signal);
+		ct_tbarrier_init(&thread_data[i].tbar, tunables.threads, tbar_counter,
+				tbar_signal);
 	}
 
 	if (myid == 0) {
 		fprintf(stdout, HEADER);
 		fprintf(stdout, "%-*s%*s%*s%*s%*s\n", 10, "# Size",
-			FIELD_WIDTH, "Bandwidth (MB/s)",
-			FIELD_WIDTH, "Latency (us)",
-			FIELD_WIDTH, "Min Lat (us)",
-			FIELD_WIDTH, "Max Lat (us)");
+		FIELD_WIDTH, "Bandwidth (MB/s)",
+		FIELD_WIDTH, "Latency (us)",
+		FIELD_WIDTH, "Min Lat (us)",
+		FIELD_WIDTH, "Max Lat (us)");
 		fflush(stdout);
 	}
 
@@ -677,13 +704,13 @@ int main(int argc, char *argv[])
 
 		iter_key.message_size = size;
 
-		ctpm_Barrier();
+		// TODO ctpm_Barrier();
 
 		/* threaded section */
 		for (i = 0; i < tunables.threads; i++) {
 			iter_key.thread_id = i;
-			ret = pthread_create(&thread_data[i].thread, NULL,
-					thread_fn, iter_key.data);
+			ret = pthread_create(&thread_data[i].thread, NULL, thread_fn,
+					iter_key.data);
 			if (ret != 0) {
 				printf("couldn't create thread %i\n", i);
 				pthread_exit(NULL); /* a more robust exit would be nice here */
@@ -693,7 +720,7 @@ int main(int argc, char *argv[])
 		for (i = 0; i < tunables.threads; i++)
 			pthread_join(thread_data[i].thread, NULL);
 
-		ctpm_Barrier();
+		// TODO ctpm_Barrier();
 
 		if (myid == 0) {
 			min_lat = max_lat = sum_lat = thread_data[0].latency;
@@ -718,14 +745,14 @@ int main(int argc, char *argv[])
 					time_end = thread_data[i].time_end;
 			}
 
-			mbps = ((bytes_sent * 1.0) / (1024. * 1024.)) / ((time_end - time_start) / (1.0 * 1e6));
+			mbps = ((bytes_sent * 1.0) / (1024. * 1024.))
+					/ ((time_end - time_start) / (1.0 * 1e6));
 
 			fprintf(stdout, "%-*d%*.*f%*.*f%*.*f%*.*f\n", 10, size,
-				FIELD_WIDTH, FLOAT_PRECISION, mbps,
-				FIELD_WIDTH, FLOAT_PRECISION,
-				sum_lat / tunables.threads,
-				FIELD_WIDTH, FLOAT_PRECISION, min_lat,
-				FIELD_WIDTH, FLOAT_PRECISION, max_lat);
+			FIELD_WIDTH, FLOAT_PRECISION, mbps,
+			FIELD_WIDTH, FLOAT_PRECISION, sum_lat / tunables.threads,
+			FIELD_WIDTH, FLOAT_PRECISION, min_lat,
+			FIELD_WIDTH, FLOAT_PRECISION, max_lat);
 			fflush(stdout);
 		}
 
@@ -742,8 +769,8 @@ int main(int argc, char *argv[])
 	fi_freeinfo(hints);
 	fi_freeinfo(fi);
 
-	ctpm_Barrier();
-	ctpm_Finalize();
+	// TODO ctpm_Barrier();
+	// TODO ctpm_Finalize();
 
 	pthread_exit(NULL);
 }

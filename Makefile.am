@@ -1,13 +1,8 @@
 AM_CFLAGS = -I$(srcdir)/include
-ACLOCAL_AMFLAGS = -I config
+ACLOCAL_AMFLAGS = -I config -std=c++11
 
 bin_PROGRAMS = \
-	performance/multi-node/rdm_mbw_mr \
-	performance/multi-node/rdm_pingpong \
 	performance/multi-node/rdm_one_sided \
-	performance/multi-node/multi_rdm_one_sided \
-	performance/multi-node/multi_rdm_one_sided_read \
-	performance/multi-node/random_access \
 	performance/single-node/lock_tests
 
 dist_bin_SCRIPTS = \
@@ -15,35 +10,34 @@ dist_bin_SCRIPTS = \
 
 noinst_LTLIBRARIES = libcraytests.la
 libcraytests_la_SOURCES = \
-	common/ct_utils.c \
 	common/ct_print_utils.c
 
 ################################################################################
 # Multi-node sources
 ################################################################################
-performance_multi_node_rdm_mbw_mr_SOURCES = \
-	performance/multi-node/rdm_mbw_mr.c
-performance_multi_node_rdm_mbw_mr_LDADD = libcraytests.la
+#performance_multi_node_rdm_mbw_mr_SOURCES = \
+#	performance/multi-node/rdm_mbw_mr.c
+#performance_multi_node_rdm_mbw_mr_LDADD = libcraytests.la
 
-performance_multi_node_rdm_pingpong_SOURCES = \
-	performance/multi-node/rdm_pingpong.c
-performance_multi_node_rdm_pingpong_LDADD = libcraytests.la
+#performance_multi_node_rdm_pingpong_SOURCES = \
+#	performance/multi-node/rdm_pingpong.c
+#performance_multi_node_rdm_pingpong_LDADD = libcraytests.la
 
 performance_multi_node_rdm_one_sided_SOURCES = \
 	performance/multi-node/rdm_one_sided.c
 performance_multi_node_rdm_one_sided_LDADD = libcraytests.la
 
-performance_multi_node_multi_rdm_one_sided_SOURCES = \
-	performance/multi-node/multi_rdm_one_sided.c
-performance_multi_node_multi_rdm_one_sided_LDADD = libcraytests.la
+#performance_multi_node_multi_rdm_one_sided_SOURCES = \
+#	performance/multi-node/multi_rdm_one_sided.c
+#performance_multi_node_multi_rdm_one_sided_LDADD = libcraytests.la
 
-performance_multi_node_multi_rdm_one_sided_read_SOURCES = \
-	performance/multi-node/multi_rdm_one_sided_read.c
-performance_multi_node_multi_rdm_one_sided_read_LDADD = libcraytests.la
+#performance_multi_node_multi_rdm_one_sided_read_SOURCES = \
+#	performance/multi-node/multi_rdm_one_sided_read.c
+#performance_multi_node_multi_rdm_one_sided_read_LDADD = libcraytests.la
 
-performance_multi_node_random_access_SOURCES = \
-        performance/multi-node/random_access.c
-performance_multi_node_random_access_LDADD = libcraytests.la
+#performance_multi_node_random_access_SOURCES = \
+#        performance/multi-node/random_access.c
+#performance_multi_node_random_access_LDADD = libcraytests.la
 
 ################################################################################
 # Single-node sources

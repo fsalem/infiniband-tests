@@ -38,7 +38,7 @@ static pthread_mutex_t clock_lock;
 static char clock_started, is_clock_lock_init;
 
 #ifndef CT_FIVERSION
-#define CT_FIVERSION FI_VERSION(1,3)
+#define CT_FIVERSION FI_VERSION(1,1)
 #endif
 
 /* Branch predictor hints */

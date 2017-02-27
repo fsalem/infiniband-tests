@@ -1,4 +1,5 @@
 /*
+
  * Copyright (c) 2015-2016 Cray Inc.  All rights reserved.
  *
  * This software is available to you under a choice of one of two
@@ -28,7 +29,7 @@
  * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- */
+
 
 #include <sys/time.h>
 #include <unistd.h>
@@ -45,7 +46,7 @@
 #include <sys/utsname.h>
 #include <dlfcn.h>
 
-#include "pmi.h"
+//#include "pmi.h"
 #include <rdma/fabric.h>
 #include <rdma/fi_domain.h>
 #include <rdma/fi_errno.h>
@@ -53,7 +54,6 @@
 #include <rdma/fi_cm.h>
 #include <rdma/fi_rma.h>
 #include "ct_utils.h"
-#include "pmi.h"
 
 #ifndef CRAY_PMI_COLL
 
@@ -214,7 +214,7 @@ static void pmi_coll_init(void)
 }
 #else
 #define pmi_coll_init()
-#endif /* CRAY_PMI_COLL */
+#endif  CRAY_PMI_COLL
 
 static void allgather(void *in, void *out, int len)
 {
@@ -323,3 +323,4 @@ void ctpm_Bcast(void *buffer, size_t len)
 	assert(rc == PMI_SUCCESS);
 }
 
+*/
