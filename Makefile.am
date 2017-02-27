@@ -1,5 +1,5 @@
 AM_CFLAGS = -I$(srcdir)/include
-ACLOCAL_AMFLAGS = -I config -std=c++11
+ACLOCAL_AMFLAGS = -I config
 
 bin_PROGRAMS = \
 	performance/multi-node/rdm_one_sided \
